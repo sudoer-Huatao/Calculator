@@ -1,16 +1,16 @@
 import ast
 import math
-import readline
 import sys
 from dataclasses import dataclass
 import builtins
+import re
 from rich import print
 
 
 @dataclass
 class Settings:
     sig_figs: int = 6  # significant figures for displayed numeric results
-    angle_mode: str = "rad"  # "rad" or "deg"
+    angle_mode: str = "deg"  # "rad" or "deg"
 
 
 settings = Settings()
@@ -160,6 +160,7 @@ Features:
 - math module functions/constants (sin, cos, pi, e, etc.)
 - Variables assignment (e.g. x = 2 * pi)
 - Commands: quit/exit, help, vars, history, clear, settings/set
+- 'ans' token: refers to previous calculation result (error if none)
 """
 
 
@@ -281,6 +282,7 @@ def safe_eval(expr: str, env: dict):
 def repl():
     env = dict(ALLOWED_NAMES)  # copy
     history = []
+    previous_result = None
     prompt = "calc> "
 
     print("Simple terminal calculator. Type [green]'help'[/green] for commands.\n")
@@ -314,8 +316,17 @@ def repl():
             for k in list(env.keys()):
                 if k not in ALLOWED_NAMES:
                     del env[k]
+            # also clear previous_result
+            previous_result = None
             print("Cleared variables")
             continue
+
+        # ans token handling: if user refers to 'ans' ensure previous result exists
+        if re.search(r"\bans\b", line):
+            if previous_result is None:
+                print("Error: no previous answer available")
+                continue
+            env["ans"] = previous_result
 
         try:
             result = safe_eval(line, env)
@@ -324,6 +335,9 @@ def repl():
                 # Print numbers compactly
                 if isinstance(result, float) and result.is_integer():
                     result = int(result)
+                # update previous result (ans)
+                previous_result = result
+                env["ans"] = result
                 print(result)
         except Exception as e:
             print("Error:", e)
@@ -332,9 +346,15 @@ def repl():
 def main():
     if len(sys.argv) > 1:
         expr = " ".join(sys.argv[1:])
+        # CLI has no previous result available
+        if re.search(r"\bans\b", expr):
+            print("Error: no previous answer available")
+            sys.exit(1)
         try:
             res = safe_eval(expr, dict(ALLOWED_NAMES))
             if res is not None:
+                if isinstance(res, float) and res.is_integer():
+                    res = int(res)
                 print(res)
         except Exception as e:
             print("Error:", e)
