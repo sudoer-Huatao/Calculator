@@ -5,6 +5,205 @@ from dataclasses import dataclass
 import builtins
 import re
 from rich import print
+import builtins as _builtins
+import re as _re
+
+# Catalogue of formulas accessible from the REPL as math.formulas() and math.formula(name)
+# e.g. formulas:   formulas()              -> lists available formulas
+#       single:    formula("circle_area")  -> shows details / expression
+
+FORMULAS = {
+    "pythagoras": {
+        "title": "Pythagorean theorem",
+        "formula": "c = sqrt(a² + b²)",
+        "expr": "sqrt(a**2 + b**2)",
+        "vars": "a, b (legs); c (hypotenuse)",
+        "example": "a=3, b=4 -> c = sqrt(3**2+4**2)",
+    },
+    "law_sines": {
+        "title": "Law of sines",
+        "formula": "a/sin(A) = b/sin(B) = c/sin(C)",
+        "expr": "a/sin(A) , b/sin(B) , c/sin(C)",
+        "vars": "a,b,c (sides); A,B,C (opposite angles of each side)",
+        "example": "a=5,A=30,B=45 -> b = (5 * sin(45)) / sin(30)",
+    },
+    "law_cosines": {
+        "title": "Law of cosines",
+        "formula": "c² = a² + b² - 2ab cos(C)",
+        "expr": "sqrt(a**2 + b**2 - 2*a*b*cos(C))",
+        "vars": "a,b (sides); C (angle opposite side c)",
+        "example": "a=4,b=5,C=60 -> c = sqrt(4**2 + 5**2 - 2*4*5*cos(60))",
+    },
+    "herons_area": {
+        "title": "Area of triangle (Heron's formula)",
+        "formula": "S = sqrt(p(p-a)(p-b)(p-c)) where p=(a+b+c)/2",
+        "expr": "sqrt(p*(p - a)*(p - b)*(p - c)) where p = (a + b + c) / 2",
+        "vars": "a, b, c (sides)",
+        "example": "a=3,b=4,c=5 -> S = sqrt(p*(p-3)*(p-4)*(p-5)) where p=(3+4+5)/2",
+    },
+    "distance_2d": {
+        "title": "Distance between two points in 2D",
+        "formula": "d = sqrt((x2 - x1)² + (y2 - y1)²)",
+        "expr": "sqrt((x2 - x1)**2 + (y2 - y1)**2)",
+        "vars": "x1, y1, x2, y2 (coordinates of the two points)",
+        "example": "x1=1,y1=2,x2=4,y2=6 -> d = sqrt((4-1)**2 + (6-2)**2)",
+    },
+    "distance_3d": {
+        "title": "Distance between two points in 3D",
+        "formula": "d = sqrt((x2 - x1)² + (y2 - y1)² + (z2 - z1)²)",
+        "expr": "sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)",
+        "vars": "x1, y1, z1, x2, y2, z2 (coordinates of the two points)",
+        "example": "x1=1,y1=2,z1=3,x2=4,y2=6,z2=8 -> d = sqrt((4-1)**2 + (6-2)**2 + (8-3)**2)",
+    },
+    "quadratic": {
+        "title": "Quadratic formula (roots of ax²+bx+c=0 where a≠0)",
+        "formula": "x = (-b ± sqrt(b²-4ac)) / (2a)",
+        "expr": "(-b + sqrt(b**2 - 4*a*c)) / (2*a), (-b - sqrt(b**2 - 4*a*c)) / (2*a)",
+        "vars": "a, b, c",
+        "example": "a=1,b=-3,c=2 -> roots 1 and 2",
+    },
+    "triangle_area": {
+        "title": "Area of a triangle",
+        "formula": "S = 1/2 * a * b* sin(C)",
+        "expr": "a * b * sin(C) / 2",
+        "vars": "a, b (sides), C (opposite angle of side c)",
+        "example": "a=4,b=3, C = 60 -> S = 4 * 3 * sin(60) / 2",
+    },
+    "compound_interest": {
+        "title": "Compound interest",
+        "formula": "A = P (1 + r/n)^(n t)",
+        "expr": "P * (1 + r/n) ** (n * t)",
+        "vars": "P (principal), r (rate), n (compounds/year), t (years)",
+        "example": "P=1000,r=0.05,n=12,t=10",
+    },
+}
+
+
+def _format_formula_entry(key, info):
+    lines = [
+        f"\n  [green]Formula[/green] : {info.get('formula','')}",
+        f"  [green]Expr[/green]    : {info.get('expr','')}",
+        f"  [green]Vars[/green]    : {info.get('vars','')}",
+    ]
+    if info.get("example"):
+        lines.append(f"  [green]Example[/green] : {info.get('example')}\n")
+    return "\n".join(lines)
+
+
+def _list_formulas():
+    # Return a multi-line string listing available formulas (also prints for convenience)
+    keys = sorted(FORMULAS.keys())
+    lines = [f"[green]{k}[/green]: {FORMULAS[k].get('title','')}" for k in keys]
+    s = "\n".join(lines)
+    print(f"\n{s}\n")
+
+
+def _show_formula(name):
+    print(name)
+    if not isinstance(name, str):
+        raise TypeError("formula name must be a string")
+    key = name.strip().lower()
+    if key in FORMULAS:
+        s = _format_formula_entry(key, FORMULAS[key])
+        print(s)
+    else:
+        raise NameError(f"Unknown formula: {name}")
+
+
+# Export helpers into the math module so they become available inside the calculator's safe env
+setattr(math, "formulas", _list_formulas)
+setattr(math, "formula", _show_formula)
+#!/usr/bin/env python3
+"""
+Terminal-based calculator (calc.py)
+
+Features:
+- Safe expression evaluation using AST (no arbitrary code execution)
+- Basic arithmetic, power, modulo, floor division
+- math module functions/constants (sin, cos, pi, e, etc.)
+- Variables assignment (e.g. x = 2 * pi)
+- Commands: quit/exit, help, vars, history, clear, settings/set
+- 'ans' token: refers to previous calculation result (error if none)
+"""
+
+import matplotlib.pyplot as _plt
+
+# store the real stdin hook so later wrapper (_input_hook) can call it
+_real_input = _builtins.input
+
+
+def _handle_plot_command(line: str):
+    # Supported syntaxes:
+    #   plot <expr> from <start> to <end> [samples N]
+    #   plot <expr> <start> <end> [N]
+    m = _re.match(
+        r"^\s*(?:plot|graph)\s+(.+?)\s+from\s+([+-]?\d+(?:\.\d*)?)\s+to\s+([+-]?\d+(?:\.\d*)?)(?:\s+samples\s+(\d+))?\s*$",
+        line,
+        _re.I,
+    )
+    if not m:
+        m = _re.match(
+            r"^\s*(?:plot|graph)\s+(.+?)\s+([+-]?\d+(?:\.\d*)?)\s+([+-]?\d+(?:\.\d*)?)(?:\s+(\d+))?\s*$",
+            line,
+            _re.I,
+        )
+    if not m:
+        print(
+            "[yellow]Plot syntax: plot (expr) from (start) to (end) samples N  (e.g. plot sin(x) from 0 to 360 samples 400)[/yellow]"
+        )
+        return
+
+    expr = m.group(1).strip()
+    if expr.lower().startswith("y="):
+        expr = expr[2:].strip()
+    try:
+        start = float(m.group(2))
+        end = float(m.group(3))
+    except Exception:
+        print("[red]Invalid numeric range for plot[/red]")
+        return
+    samples = int(m.group(4)) if m.group(4) else 400
+    if samples < 10 or samples > 10000:
+        print("[red]Samples must be between 10 and 10000[/red]")
+        return
+
+    xs = [start + (end - start) * i / (samples - 1) for i in range(samples)]
+    ys = []
+    env = dict(ALLOWED_NAMES)
+
+    for x in xs:
+        env["x"] = x
+        try:
+            v = safe_eval(expr, env)
+            ys.append(float(v))
+        except Exception:
+            ys.append(float("nan"))
+
+    try:
+        _plt.figure()
+        _plt.plot(xs, ys, "-")
+        _plt.xlabel("x")
+        _plt.ylabel(expr)
+        _plt.title(f"plot: {expr}")
+        _plt.grid(True)
+        _plt.show()
+    except Exception as e:
+        print("[red]Plot failed:[/red]", e)
+
+
+def _plot_wrapper(prompt=""):
+    try:
+        line = _real_input(prompt)
+    except (EOFError, KeyboardInterrupt):
+        raise
+    if line.strip().lower().startswith(("plot ", "graph ")):
+        _handle_plot_command(line)
+        return ""  # cause repl to skip this iteration
+    return line
+
+
+# Install wrapper so subsequent assignment to _original_input will capture it.
+_builtins.input = _plot_wrapper
 
 
 @dataclass
@@ -150,18 +349,6 @@ def _print_hook(*args, **kwargs):
 
 
 builtins.print = _print_hook
-#!/usr/bin/env python3
-"""
-Terminal-based calculator (calc.py)
-
-Features:
-- Safe expression evaluation using AST (no arbitrary code execution)
-- Basic arithmetic, power, modulo, floor division
-- math module functions/constants (sin, cos, pi, e, etc.)
-- Variables assignment (e.g. x = 2 * pi)
-- Commands: quit/exit, help, vars, history, clear, settings/set
-- 'ans' token: refers to previous calculation result (error if none)
-"""
 
 
 # Environment: whitelist math functions/constants + a few builtins
@@ -203,6 +390,8 @@ class Evaluator(ast.NodeVisitor):
     def visit_Constant(self, node):
         if isinstance(node.value, (int, float)):
             return node.value
+        if node.value in FORMULAS:
+            return node.value
         raise ValueError("Only numeric constants are allowed")
 
     # For Python <3.8 compatibility
@@ -212,6 +401,13 @@ class Evaluator(ast.NodeVisitor):
     def visit_Name(self, node):
         if node.id in self.env:
             return self.env[node.id]
+        if node.id == "plot":
+            print(
+                "[yellow]Plotting syntax: [ plot (expr) from (start) to (end) samples N ][/yellow]"
+            )
+            return None
+        if node.id in FORMULAS:
+            return node.id
         raise NameError(f"Unknown name: {node.id}")
 
     def visit_BinOp(self, node):
@@ -285,7 +481,7 @@ def repl():
     previous_result = None
     prompt = "calc> "
 
-    print("Simple terminal calculator. Type [green]'help'[/green] for commands.\n")
+    print("\n\nSimple terminal calculator. Type [green]'help'[/green] for commands.\n")
     while True:
         try:
             line = input(prompt).strip()
@@ -298,7 +494,7 @@ def repl():
             break
         if line == "help":
             print(
-                "[yellow]Enter expressions to evaluate. Commands[/yellow]: [green]quit, help, vars, history, clear, settings[/green]"
+                "[yellow]Enter expressions to evaluate. Commands[/yellow]: [green]quit, help, plot <expr>, formulas(), history, vars, clear, settings[/green]"
             )
             continue
         if line == "vars":
@@ -319,6 +515,12 @@ def repl():
             # also clear previous_result
             previous_result = None
             print("Cleared variables")
+            continue
+
+        if line == "formulas":
+            print(
+                "[yellow]Type [ formulas() ] instead to list available formulas.[/yellow]"
+            )
             continue
 
         # ans token handling: if user refers to 'ans' ensure previous result exists
