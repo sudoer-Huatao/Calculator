@@ -1,3 +1,20 @@
+#!/usr/bin/env python3
+"""
+Terminal-based calculator (calc.py)
+
+Features:
+- Safe expression evaluation using AST (no arbitrary code execution)
+- Basic arithmetic, power, modulo, floor division
+- math module functions/constants (sin, cos, pi, e, etc.)
+- Variables assignment (e.g. x = 2 * pi)
+- Formulas catalogue
+- Plotting of functions (matplotlib)
+- 'ans' token: refers to previous calculation result (error if none)
+- Settings menu
+- Result history access
+- Commands: quit/exit, help, plot, formulas, formula, vars, history, clear, settings/set
+"""
+
 import ast
 import math
 import sys
@@ -6,7 +23,6 @@ import builtins
 import re
 from rich import print
 import builtins as _builtins
-import re as _re
 
 # Catalogue of formulas accessible from the REPL as math.formulas() and math.formula(name)
 # e.g. formulas:   formulas()              -> lists available formulas
@@ -113,18 +129,6 @@ def _show_formula(name):
 # Export helpers into the math module so they become available inside the calculator's safe env
 setattr(math, "formulas", _list_formulas)
 setattr(math, "formula", _show_formula)
-#!/usr/bin/env python3
-"""
-Terminal-based calculator (calc.py)
-
-Features:
-- Safe expression evaluation using AST (no arbitrary code execution)
-- Basic arithmetic, power, modulo, floor division
-- math module functions/constants (sin, cos, pi, e, etc.)
-- Variables assignment (e.g. x = 2 * pi)
-- Commands: quit/exit, help, vars, history, clear, settings/set
-- 'ans' token: refers to previous calculation result (error if none)
-"""
 
 import matplotlib.pyplot as _plt
 
@@ -136,16 +140,16 @@ def _handle_plot_command(line: str):
     # Supported syntaxes:
     #   plot <expr> from <start> to <end> [samples N]
     #   plot <expr> <start> <end> [N]
-    m = _re.match(
+    m = re.match(
         r"^\s*(?:plot|graph)\s+(.+?)\s+from\s+([+-]?\d+(?:\.\d*)?)\s+to\s+([+-]?\d+(?:\.\d*)?)(?:\s+samples\s+(\d+))?\s*$",
         line,
-        _re.I,
+        re.I,
     )
     if not m:
-        m = _re.match(
+        m = re.match(
             r"^\s*(?:plot|graph)\s+(.+?)\s+([+-]?\d+(?:\.\d*)?)\s+([+-]?\d+(?:\.\d*)?)(?:\s+(\d+))?\s*$",
             line,
-            _re.I,
+            re.I,
         )
     if not m:
         print(
@@ -185,6 +189,8 @@ def _handle_plot_command(line: str):
         _plt.xlabel("x")
         _plt.ylabel(expr)
         _plt.title(f"plot: {expr}")
+        _plt.axvline(0, color="black")
+        _plt.axhline(0, color="black")
         _plt.grid(True)
         _plt.show()
     except Exception as e:
@@ -494,7 +500,16 @@ def repl():
             break
         if line == "help":
             print(
-                "[yellow]Enter expressions to evaluate. Commands[/yellow]: [green]quit, help, plot <expr>, formulas(), history, vars, clear, settings[/green]"
+                """[yellow]Enter expressions to evaluate. Commands[/yellow]:
+[green]quit,
+help,
+plot <expr>,
+formulas,
+formula([ name_of_formula ])
+history,
+vars,
+clear,
+settings[/green]"""
             )
             continue
         if line == "vars":
@@ -518,9 +533,11 @@ def repl():
             continue
 
         if line == "formulas":
-            print(
-                "[yellow]Type [ formulas() ] instead to list available formulas.[/yellow]"
-            )
+            _list_formulas()
+            continue
+
+        if line == "formula":
+            print('[yellow]Usage: formula("name_of_formula")[/yellow]')
             continue
 
         # ans token handling: if user refers to 'ans' ensure previous result exists
